@@ -1,0 +1,1689 @@
+---
+title: "GEAC Notebook"
+author:
+- name: Oliver M. Crook
+- name: William J. Bradshaw
+output:
+  BiocStyle::html_document:
+    toc_float: yes
+---
+# Introduction
+
+This is the workbook accompanying the manuscript: Analysis of the first Genetic
+Engineering Attribution Challenge. This workbook allows the exploration
+of the underlying data and the reproduction of all the figures. Each section
+is designed to be self-contained so you can use the table of contents bar
+on the left hand side to scroll down to a figure of interest. 
+
+
+# Figure 1B
+#==============================================================================
+# MAIN TEXT FIGURE 1B: HISTORICAL GEA ACCURACY
+#==============================================================================
+
+## Libraries & formatting
+```{r,}
+source("scripts/aux_format-plots.R")
+
+# Input paths
+path_key <- "data/key-model-stats.csv"
+
+# Output path
+out_path  <- "figures/main_fig1-accuracy.svg"
+
+# Define plotting theme
+xtext = element_text(angle = 45, vjust = 1, hjust = 1,
+                     margin = lmargin(t=0.3,b=-0.9),
+                     size = fontsize_title)
+ltext = element_text(margin = lmargin(t=0.1,b=0.1,l=0.1,r=0))
+theme_col <- theme_internal_strong + theme(
+  axis.title.x = element_blank(),
+  axis.text.x.bottom = xtext,
+  legend.text = ltext,
+  legend.position = c(0.98, 0.98),
+  legend.justification = c("right", "top"),
+  legend.title = element_blank(),
+  legend.margin = lmargin(rep(0.1,4)),
+  legend.box.margin = lmargin(rep(0.1,4)),
+  legend.key.height = lines(0.9),
+  legend.key.width  = lines(0.9),
+  aspect.ratio = NULL,
+  plot.margin = lmargin(t=0.3,l=0.05,r=0.05)
+)
+```
+
+## Set parameters
+```{r,}
+
+out_width <- 2.762
+out_asp   <- 2.050/out_width
+source_names_raw <- c("BLAST (new)", "BLAST (Alley et al., original)",
+                      "BLAST (Alley et al., corrected)", "Nielsen & Voigt (2018)", "Alley et al. (2020)",
+                      "GEAC (1st place)", "GEAC (2nd place)", "GEAC (3rd place)",
+                      "GEAC (4th place)", "GEAC Ensemble")
+source_names_plot <- c(NA, NA, "BLAST", "Nielsen & Voigt\n(2018)",
+                       "Alley et al.\n(2020)", "GEAC\n(1st place)", NA, NA, NA,
+                       "GEAC\nEnsemble")
+source_levels <- source_names_plot[!is.na(source_names_plot)]
+palette_fill <- unname(c(palette_primary_dark["grey"], palette_primary["grey"]))
+```
+
+
+```{r,}
+#------------------------------------------------------------------------------
+# Import and process data
+#------------------------------------------------------------------------------
+
+tab_sources <- tibble(source = source_names_raw,
+                      source_new = source_names_plot)
+
+data_key <- import_csv(path_key) %>%
+  inner_join(tab_sources, by = "source") %>%
+  filter(!is.na(source_new)) %>% select(-source) %>%
+  select(source = source_new, everything()) %>%
+  mutate(source = factor(source, levels = source_levels)) %>%
+  arrange(source)
+
+tab_error <- data_key %>% select(source, accuracy_top1, accuracy_top10) %>%
+  gather(metric, accuracy, -source) %>%
+  mutate(metric = sub("accuracy_top", "Top ", metric),
+         metric = fct_inorder(metric),
+         error = 1-accuracy)
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Make headline plot
+#------------------------------------------------------------------------------
+
+g_acc <- ggplot(tab_error, aes(x=source, y=accuracy, fill = metric)) +
+  geom_col_mid(position = "dodge") +
+  scale_y_percent(name = "Accuracy (%)") +
+  scale_fill_manual(values = palette_fill) +
+  theme_col + theme(legend.position = c(0.95, 0.05),
+                    legend.justification = c("right", "bottom"))
+
+g_error <- ggplot(tab_error, aes(x=source, y=error, fill=metric)) +
+  geom_col_mid(position = "dodge") +
+  scale_y_cont_nominor(name = "Misclassification rate (%)",
+                       breaks = seq(0,1,0.1), limits = c(0,0.58),
+                       expand = c(0,0), labels = function(x) x*100) +
+  scale_fill_manual(values = palette_fill) +
+  theme_col
+
+g_error
+```
+
+# Figure 1C
+#==============================================================================
+# MAIN TEXT FIGURE 1C, PART 1: DATASET SIZES & SEQUENCE LENGTHS
+#==============================================================================
+
+```{r,}
+# Libraries
+source("scripts/aux_format-plots.R")
+
+# Data paths
+size_path <- "data/dataset-size.csv"
+len_path  <- "data/sequence-lengths-sample.csv"
+
+# Output path
+out_svg <- "figures/main_fig1-datasets.svg"
+
+# Plotting parameters
+asp_ratio  <- 0.6 # Aspect ratio for export (width/height)
+
+# Scales
+scale_fill_palette <- purrr::partial(scale_fill_manual,
+                                     values = unname(palette_primary))
+
+# Factor levels
+dataset_levels <- c("train", "leaderboard", "test")
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Import and process data
+#------------------------------------------------------------------------------
+
+# Dataset sizes
+data_size <- import_csv(size_path) %>% 
+  mutate(dataset = factor(dataset, levels = dataset_levels))
+
+# Sampled sequence lengths from each dataset
+data_len <- import_csv(len_path) %>% 
+  mutate(dataset = factor(dataset, levels = dataset_levels))
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Plot relative sizes (for metadata / labels columns)
+#------------------------------------------------------------------------------
+
+g_size <- ggplot(data_size, aes(x=1, y=size, fill = dataset)) +
+  geom_col(position = "fill") + scale_fill_palette() +
+  theme_void() + theme(legend.position = "blank")
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Plot sequence lengths (for sequence data column)
+#------------------------------------------------------------------------------
+
+g_seq <- ggplot(data_len, 
+                aes(x=sequence_order, y=sequence_length, fill=dataset)) +
+  geom_col(width = 1) + 
+  coord_flip() + 
+  scale_y_reverse() + scale_x_reverse() +
+  scale_fill_palette() +
+  theme_void() + theme(legend.position = "blank")
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Arrange & save
+#------------------------------------------------------------------------------
+
+# Arrange with patchwork
+g_all <- g_seq + g_size + g_size + plot_layout(widths = c(12,1,1))
+g_all
+
+#*Note that this figure is eddited externally to produce the figure in the 
+#*manuscript.
+
+```
+
+# Figure 2
+#==============================================================================
+# MAIN TEXT FIGURE 2: CORE COMPETITION METRICS
+#==============================================================================
+
+## Libraries & formatting
+```{r,}
+source("scripts/aux_format-plots.R")
+
+# Input path
+path_countries <- "data/country-percentages.csv"
+path_teams     <- "data/team-stats.csv"
+path_accuracy  <- "data/team-top-n-accuracy.csv"
+
+# Output paths
+out_path_main <- "figures/main_fig2.png" # Main figure
+out_path_si_nsub <- "figures/si_n-submissions.png" # SI figure on submission #s
+out_path_si_acc_all <- "figures/si_accuracy-all-submissions.png"
+out_path_si_f1_all <- "figures/si_f1-all-submissions.png"
+out_path_si_pr_decile <- "figures/si_precision-recall-deciles.png"
+
+# Output parameters
+output_width_in <- page_width_in # Width of page
+output_width_small <- fig_width_single_wide_in # Width for wide single-panel SI figures
+output_asp_main <- 0.7 # Main-text figure
+output_asp_si_nsub <- 0.55 # Two-panel n_submissions figure
+output_asp_si_acc <- 0.7 # One-panel accuracy figure
+output_asp_si_f1 <- 0.7 # One-panel F1 figure
+output_asp_si_pr_decile <- 0.6
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Define palettes, scales, themes
+#------------------------------------------------------------------------------
+
+# Palettes
+palette_countries_part <- c(rbind(palette_primary_dark[c("blue", "orange", "green2")],
+                                  palette_primary_pale[c("yellow", "pink", "blue")]),
+                            palette_primary_dark["beige"],palette_primary_mid["grey"])
+
+#------------------------------------------------------------------------------
+# Import data
+#------------------------------------------------------------------------------
+
+# Country data (for pie chart)
+data_countries <- suppressMessages(read_csv(path_countries))
+
+# Team data
+data_teams <- suppressMessages(read_csv(path_teams))
+
+# Accuracy data
+data_accuracy <- as.matrix(read.csv(path_accuracy, header = FALSE))
+
+
+```
+
+## Designate country display groups
+```{r,}
+#------------------------------------------------------------------------------
+# Make pie chart
+#----------------------------`--------------------------------------------------
+europe_countries <- c("UK", "Netherlands", "Germany", "France", "Spain",
+                      "Other Europe")
+asia_countries   <- c("China", "Other Asia")
+other_countries <- c("Other", "Other North America", "Other South America",
+                     "Africa", "Oceania")
+groups_out <- c("USA", "India", "Russia", "Other\nEurope", "Other\nAsia",
+                "Canada", "Brazil", "Other")
+data_countries_collapsed <- data_countries %>%
+  mutate(in_europe = country %in% europe_countries,
+         in_asia   = country %in% asia_countries,
+         in_other  = country %in% other_countries,
+         group = ifelse(in_europe, "Other\nEurope",
+                        ifelse(in_asia, "Other\nAsia",
+                               ifelse(in_other, "Other", country)))) %>%
+  group_by(group) %>%
+  summarise(percent_participants = sum(percent_participants),
+            percent_site_visitors = sum(percent_site_visitors)) %>%
+  rename(country = group) %>%
+  arrange(match(country, groups_out)) %>%
+  mutate(country = fct_inorder(country))
+
+names(palette_countries_part) <- groups_out
+
+# Registered participant data
+data_countries_part <- data_countries_collapsed %>%
+  rename(percent = percent_participants) %>%
+  mutate(label = country,
+         csum = rev(cumsum(rev(percent))),
+         pos = percent/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), percent/2, pos)) %>%
+  select(-percent_site_visitors, -csum)
+
+# Text alignment
+hjust_countries_part <- c(0, 0, 0, 1.1, 1, 1, 0.7, 0.2)
+vjust_countries_part <- c(0, 0.5, 1, 0.7, 0.8, 0.6, 0, 0)
+
+# Make pie charts
+g_countries_part <- ggplot(data_countries_part,
+                           aes(x=1, y=percent, fill=fct_inorder(label))) +
+  geom_col(width = 1) +
+  coord_polar(theta = "y", direction = -1, clip = "off") +
+  geom_text(aes(y = pos, label = label), x=1.8,
+            size = rescale_font(fontsize_base),
+            hjust = hjust_countries_part,
+            vjust = vjust_countries_part, lineheight = 0.9) +
+  geom_segment(aes(y=pos, yend=pos), x=1.5, xend=1.7,
+               size = 0.2) +
+  scale_y_continuous(name = "Participant countries",
+                     breaks = data_countries_part$pos,
+                     labels = data_countries_part$label) +
+  scale_fill_manual(values = palette_countries_part) +
+  guides(fill = FALSE) +
+  theme_blank + theme(
+    axis.title = NULL,
+    axis.title.x = element_text(margin = lmargin(1.5,0,0,0),
+                                face = "bold", hjust = 0.5,
+                                vjust = 0.5),
+    axis.title.y = element_blank(),
+    aspect.ratio = 1,
+    plot.margin = lmargin(r=2.5)
+  )
+```
+
+
+```{r,}
+#------------------------------------------------------------------------------
+# Rank vs number of submissions (main plots)
+#------------------------------------------------------------------------------
+
+# Prepare dataset
+data_prf <- data_teams %>% select(-starts_with("accuracy")) %>%
+  mutate(ranking_pc = prediction_track_ranking/max(prediction_track_ranking),
+         ranking_decile = ceiling(ranking_pc*10)) %>%
+  mutate(winning_rank = ifelse(prediction_track_ranking <= n_winners,
+                               prediction_track_ranking, "Other"),
+         winning_rank = factor(winning_rank, levels = c(1:n_winners, "Other")),
+         )
+data_prf_winners    <- data_prf %>% filter(winning_rank != "Other")
+data_prf_nonwinners <- data_prf %>% filter(winning_rank == "Other")
+
+# Make complete plot
+g_nsub_all <- ggplot(aes(x=prediction_track_ranking, y=n_entries,
+                         colour=winning_rank), data = NULL) +
+  geom_line_thin(colour = last(palette_winners), data = data_prf) +
+  geom_point_nonwinners(data = data_prf_nonwinners) +
+  geom_point_winners(data = data_prf_winners) +
+  scale_x_ranking_all_trunc() +
+  scale_y_cont_nominor(name = "# Submissions", limits = c(0, 150),
+                       expand = c(0,0)) +
+  scale_colour_winners() +
+  theme_base
+
+# Top 100 only
+g_nsub_100 <- g_nsub_all + scale_x_ranking_100()
+```
+
+
+```{r,}
+#------------------------------------------------------------------------------
+# Rank vs number of submissions (decile plot)
+#------------------------------------------------------------------------------
+
+# Derive decile labels
+data_prf_deciles_labelled <- data_prf %>%
+  group_by(ranking_decile) %>%
+  arrange(prediction_track_ranking) %>%
+  mutate(decile_rank_min = min(prediction_track_ranking),
+         decile_rank_max = max(prediction_track_ranking),
+         decile_label = paste(decile_rank_min, 
+                              decile_rank_max, sep=" to "),
+         decile_label_long = paste("Rank", decile_label),
+         decile_label = fct_inorder(decile_label),
+         decile_label_long = fct_inorder(decile_label_long))
+
+# Summarise by decile
+data_prf_deciles_summ <- data_prf_deciles_labelled %>%
+  summarise(avg_n_entries = mean(n_entries),
+            decile_label = decile_label[1])
+
+# Make decile plot
+g_nsub_deciles <- ggplot(data_prf_deciles_summ, 
+                         aes(x=decile_label, y=avg_n_entries)) +
+  geom_col_mid(fill = last(palette_winners)) +
+  scale_x_discrete(name = "Prediction Track ranking") +
+  scale_y_cont_nominor(name = "Mean submissions per team",
+                       expand = c(0,0), limits = c(0,50)) +
+  theme_col
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Accuracy vs rank
+#------------------------------------------------------------------------------
+
+# Prepare data for plotting
+tab_rank_accuracy <- data_teams %>%
+  select(prediction_track_ranking, starts_with("accuracy_")) %>%
+  gather(type, accuracy, -prediction_track_ranking) %>%
+  mutate(N = as.integer(sub("accuracy_top", "", type)),
+         type = paste("Top", N),
+         type = factor(type, levels = paste("Top", sort(unique(N)))),
+         error = 1 - accuracy) %>%
+  arrange(type == "Top 1", type == "Top 10", type == "Top 5")
+
+# Make plot (all teams)
+g_accuracy_rank_all <-  ggplot(tab_rank_accuracy, 
+                               aes(x=prediction_track_ranking, y=accuracy,
+                                   colour=type, shape=type)) +
+  geom_line_thin() + geom_point(size = 1) +
+  scale_x_ranking_all() + scale_y_percent(name = "Accuracy (%)") +
+  scale_colour_accuracy() + scale_shape_multi(name = "Accuracy metric:") +
+  theme_base + theme(aspect.ratio = 1/2)
+
+# Top 100 only
+g_accuracy_rank_100 <- g_accuracy_rank_all + scale_x_ranking_100() +
+  theme(aspect.ratio = plot_aspect_ratio_base)
+```
+
+
+```{r,}
+#------------------------------------------------------------------------------
+# Macro precision, recall, F1 (all submissions)
+#------------------------------------------------------------------------------
+
+# Split labelled dataset by winner status (need for facet plot later)
+data_prf_dl_winners    <- data_prf_deciles_labelled %>%
+  filter(winning_rank != "Other")
+data_prf_dl_nonwinners <- data_prf_deciles_labelled %>%
+  filter(winning_rank == "Other")
+
+# Make precision/recall plot
+g_precision_recall <- ggplot(aes(x=macro_precision, y=macro_recall,
+                                 colour=winning_rank), data = NULL) +
+  geom_abline(size = 0.3, colour = palette_primary_mid["grey"],
+              linetype = "dashed") +
+  geom_point_nonwinners(data = data_prf_dl_nonwinners, alpha = 0.7) +
+  geom_point_winners(data = data_prf_dl_winners, alpha = 1) +
+  scale_x_proportion(name = "Precision") +
+  scale_y_proportion(name = "Recall") +
+  scale_colour_winners() +
+  guides(alpha = FALSE) +
+  theme_base
+
+# Make macro-F1 plots
+g_f1_all <- ggplot(aes(x=prediction_track_ranking, y=macro_f1,
+                       colour=winning_rank), data = NULL) +
+  geom_line_thin(data = data_prf, colour = last(palette_winners)) +
+  geom_point_nonwinners(data = data_prf_nonwinners) +
+  geom_point_winners(data = data_prf_winners) +
+  scale_x_ranking_all() + scale_y_proportion(name = "F1 score") +
+  scale_colour_winners() +
+  theme_base + theme(aspect.ratio = 1/2)
+
+g_f1_100 <- g_f1_all + scale_x_ranking_100() +
+  theme(aspect.ratio = plot_aspect_ratio_base)
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Precision/recall by decile
+#------------------------------------------------------------------------------
+
+# Make plot
+g_precision_recall_deciles <- g_precision_recall +
+  facet_wrap(~decile_label_long, ncol = 5) +
+  theme_col + theme(aspect.ratio = 1,
+                    strip.text = element_text(face = "plain"))
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Winning team accuracy curves
+#------------------------------------------------------------------------------
+
+# Sort accuracy scores by top-10 accuracy, then filter for winners
+acc_order <- order(data_accuracy[,10], decreasing = TRUE)
+n_winners <- 4
+n_labs <- ncol(data_accuracy)
+data_accuracy_ordered <- data_accuracy[acc_order,]
+data_accuracy_winners <- data_accuracy_ordered[1:n_winners,]
+dimnames(data_accuracy_winners) <- list(rank = 1:n_winners, N = 1:n_labs)
+
+# Convert into tibble
+tab_accuracy_winners <- data_accuracy_winners %>% 
+  as.table(responseName = "accuracy", stringsAsFactors = FALSE) %>% 
+  as.data.frame(stringsAsFactors = FALSE, responseName = "accuracy") %>% 
+  as_tibble %>% mutate(N = as.numeric(N))
+
+# Plot accuracy
+g_accuracy_winners <- ggplot(tab_accuracy_winners, 
+                             aes(x=N, y=accuracy, colour = rank)) +
+  geom_line_thin() + geom_point_winners() +
+  scale_x_log10(name = "N") +
+  scale_y_cont_nominor(name = "Top-N accuracy (%)",
+                     labels = function(x) as.integer(x*100),
+                     breaks = seq(0,1,0.1), limits = c(0.6, 1),
+                     expand = c(0,0.01)) +
+  scale_colour_winners() +
+  theme_base
+```
+
+## Bring all figures together
+```{r,}
+#------------------------------------------------------------------------------
+# Collect all subfigures for main figure
+#------------------------------------------------------------------------------
+
+# Collate subfigures
+g_acc_win_out <- g_accuracy_winners + guides(colour = FALSE)
+g_pre_rec_out <- g_precision_recall + guides(colour = FALSE, alpha = FALSE)
+
+# Assemble grid
+g_figure <- (g_countries_part + g_nsub_100 + g_accuracy_rank_100) / 
+  (g_acc_win_out + g_pre_rec_out + g_f1_100) +
+  plot_annotation(tag_levels = "a") +
+  plot_layout(guides = "collect", #ncol = 3, nrow = 2, 
+              widths = c(1,1,1), heights = c(1,1)
+              ) & 
+  theme_legend & theme(
+    legend.box = "vertical"
+    )
+g_figure
+
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Collate SI figures
+#------------------------------------------------------------------------------
+
+g_si_nsub <- wrap_plots(g_nsub_all, g_nsub_deciles, ncol = 2, widths = c(1,1),
+                        guides = "collect") +
+  plot_annotation(tag_levels = "a") &
+  theme_legend
+g_si_nsub
+```
+
+# Figure 3
+
+#==============================================================================
+# MAIN TEXT FIGURE 3 & 4: X-metrics
+#==============================================================================
+
+```{r,}
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Input paths
+path_accuracy <- "data/team-top-n-accuracy.csv"
+path_teams <- "data/team-stats.csv"
+path_key <- "data/key-model-stats.csv"
+
+# Output paths
+out_path_fig3_main <- "figures/main_fig3.png"
+out_path_fig4_main <- "figures/main_fig4.png"
+out_path_x_all <- "figures/si_xmetrics-all-submissions.png"
+
+# Parameters
+example_team_rank <- 126 # Ranking of team to use for example plot
+tag_margin_fig3 <- lmargin(t = 0.2, r = 0.2, b = -0.5, l = 0.3) # Margin of subfigure labels
+tag_margin_fig4 <- lmargin(t = 0, r = 0.2, b = 0.5, l = 0.3)
+source_names_raw <- c("BLAST (new)", "BLAST (Alley et al., original)",
+                      "BLAST (Alley et al., corrected)", "Nielsen & Voigt (2018)", "Alley et al. (2020)",
+                      "GEAC (1st place)", "GEAC (2nd place)", "GEAC (3rd place)",
+                      "GEAC (4th place)", "GEAC Ensemble")
+source_names_plot <- c(NA, NA, "BLAST", "Nielsen & Voigt (2018)",
+                       "Alley et al. (2020)", "GEAC (1st place)", NA, NA, NA,
+                       "GEAC Ensemble")
+
+# Output parameters
+out_width_main <- page_width_in
+out_width_si   <- fig_width_single_wide_in
+out_asp_main   <- 0.45
+out_asp_si     <- 0.7
+
+# Palettes
+palette_nlabs <- unname(palette_primary_darkmid["grey"])
+palette_example <- unname(palette_primary["green2"])
+
+# Factor levels
+x_levels <- c("X99", "X95", "X90", "X80")
+win_levels <- c(1:n_winners, "Other")
+outlier_levels <- c(TRUE, FALSE) # Fig. 4 outliers
+source_levels <- source_names_plot[!is.na(source_names_plot)]
+
+# Scales
+scale_shape_x <- purrr::partial(scale_shape_multi,
+                                name = "Metric:")
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Read data
+#------------------------------------------------------------------------------
+
+# Import accuracy and team stats
+data_accuracy <- import_csv_matrix(path_accuracy)
+data_teams    <- import_csv(path_teams)
+
+# Import, rename and filter key sources
+tab_sources <- tibble(source = source_names_raw,
+                      source_new = source_names_plot)
+data_key <- import_csv(path_key) %>%
+    inner_join(tab_sources, by = "source") %>%
+    filter(!is.na(source_new)) %>% select(-source) %>%
+    select(source = source_new, everything()) %>%
+    mutate(source = factor(source, levels = source_levels)) %>%
+    arrange(source)
+```
+
+```{r,}
+#-----------------------------------------------------------------------------
+# X95 overview plot (example team)
+#------------------------------------------------------------------------------
+
+# Get example data
+tab_example <- filter(data_teams, 
+                      prediction_track_ranking == example_team_rank)
+which_accuracy <- which(data_accuracy[,10] == tab_example$accuracy_top10 &
+                            data_accuracy[,5] == tab_example$accuracy_top5)
+accuracies_example <- tibble(N = 1:ncol(data_accuracy),
+                             accuracy = data_accuracy[which_accuracy,])
+
+# Extract annotation data
+annot_scale <- 1.15
+tab_annot <- tibble(
+    y = c(0.95, 0.99),
+    x = c(tab_example$X95, tab_example$X99),
+    colour = palette_x[c(2,1)],
+    label = c("X95", "X99"),
+    hjust = c(1,0)
+) %>% mutate(x_scaled = x * c(1/annot_scale, annot_scale))
+
+# Plot helper functions & parameters
+geom_seg <- purrr::partial(geom_segment, size = 0.3, linetype = "dashed",
+                           data = tab_annot)
+
+#ggplot
+g_example <- ggplot(accuracies_example, aes(x = N, y = accuracy))  +
+    labs(x = "N", y = "Top-N Accuracy (%)", title = "") +
+    geom_line_thin(color = palette_example[1]) +
+    geom_point_fixed(color = palette_example[1], size = 1) +
+    geom_seg(aes(xend = x, y = y, yend = y, colour = colour), x = -Inf) +
+    geom_seg(aes(yend = y, x = x, xend = x, colour = colour), y = -Inf) +
+    geom_text(aes(x = x_scaled, colour = colour, hjust = hjust, 
+                  label = label), data = tab_annot, y = 0.51,
+              size = rescale_font(fontsize_base), vjust = 0) +
+    scale_y_cont_nominor(labels = function(x) as.integer(x*100),
+                         breaks = seq(0,1,0.1), limits = c(0.5, 1),
+                         expand = c(0,0.01)) +
+    scale_x_log10(limits = c(NA,2500)) +
+    scale_colour_identity() +
+    theme_base + theme(legend.position = "none",
+                       plot.tag = element_text(margin = tag_margin_fig3))
+
+g_example
+```
+
+```{r,}
+#-----------------------------------------------------------------------------
+# XN scores plot (main figure)
+#------------------------------------------------------------------------------
+
+# Prepare dataset
+tab_exclusion <- data_teams %>% rename(ranking = prediction_track_ranking) %>%
+    select(ranking, starts_with("X")) %>%
+    gather(metric, value, -ranking) %>%
+    mutate(metric = factor(metric, levels = x_levels))
+
+# Make plot
+g_exclusion_100 <- ggplot(filter(tab_exclusion, metric %in% c("X99", "X95")),
+                          aes(x = ranking, y = value, color = metric,
+                              shape = metric)) +
+    geom_point(size = 1) +
+    geom_hline(yintercept = n_labs, colour = palette_nlabs[1],
+               linetype = "dashed", size = 0.3) +
+    scale_x_ranking_100() +
+    scale_y_log10(name = "N", minor_breaks = NULL, limits = c(1, n_labs*1.1),
+                  expand = c(0,0)) +
+    scale_colour_x() + scale_shape_x() +
+    theme_base + theme(plot.tag = element_text(margin = tag_margin_fig3))
+
+g_exclusion_100
+
+#-----------------------------------------------------------------------------
+# XN scores plot (SI)
+#------------------------------------------------------------------------------
+
+# Make plot
+g_exclusion_all <- ggplot(tab_exclusion,
+                          aes(x = ranking, y = value, color = metric,
+                              shape = metric)) +
+    geom_point(size = 1) +
+    geom_hline(yintercept = n_labs, colour = palette_nlabs[1],
+               linetype = "dashed", size = 0.3) +
+    scale_x_ranking_all() +
+    scale_y_log10(name = "N", limits = c(1, NA),
+                  expand = c(0,0)) +
+    scale_colour_x() + scale_shape_x() +
+    theme_base + theme(plot.tag = element_text(margin = tag_margin_fig3),
+                       aspect.ratio = 1/2)
+
+g_exclusion_all
+
+#------------------------------------------------------------------------------
+# Key model XN (summary, full in SI from another script)
+#------------------------------------------------------------------------------
+
+df <- data_key %>% select(source, X99, X95) %>% gather(metric, N, -source) %>%
+    mutate(metric = factor(metric, levels = x_levels))
+
+df_annot <- data_key %>% select(source, N=X99) %>%
+    filter(grepl("GEAC", source)) %>% 
+    mutate(metric="X99")
+
+g_prior <- ggplot(df, aes(x = source, y = N, fill = metric)) +
+    geom_col_mid(position = "dodge") +
+    geom_hline(yintercept = n_labs, colour = palette_nlabs[1],
+               linetype = "dashed", size = 0.3) +
+    annotate("text", x = Inf, y = n_labs-40, label = "All labs",
+             size = rescale_font(fontsize_base), hjust = 1, vjust = 1,
+             colour = palette_nlabs[1]) +
+    geom_text(aes(colour = metric, label = N), data = df_annot,
+              size = fontsize_base_rescaled, angle = 45,
+              hjust = 1, vjust = 1, nudge_y = 320, nudge_x = 0.05,
+              show.legend = FALSE) +
+    scale_y_cont_nominor(name = "N", limits = c(0,1400),
+                         breaks = seq(0,2000,400), expand = c(0,0)) +
+    scale_fill_x() + scale_colour_x_dark() +
+    theme_col + theme(axis.title.x.bottom = element_blank(),
+                      plot.tag = element_text(margin = tag_margin_fig3))
+
+g_prior
+```
+
+# Figure 4
+```{r,}
+#------------------------------------------------------------------------------
+# Linear exclusion plots (Fig. 4)
+#------------------------------------------------------------------------------
+
+# Define outlier values
+outlier_min_100 <- list(X95 = n_labs-20, X99 = n_labs-20)
+
+# Add winner annotations to exclusion data
+tab_exclusion_linear <- tab_exclusion %>% 
+    filter(metric %in% c("X99", "X95")) %>%
+    mutate(winning_rank = ifelse(ranking <= n_winners, ranking, "Other"),
+           winning_rank = factor(winning_rank, levels = win_levels))
+
+# Split by metric
+tab_el_split <- tab_exclusion_linear %>%
+    group_by(metric) %>% group_split() %>%
+    setNames(sapply(., function(x) first(x$metric))) %>%
+    lapply(., function(x) select(x, -metric))
+
+# Filter to top-100
+tab_el_split_100 <- lapply(tab_el_split, function(x) filter(x, ranking <= 100))
+
+# Assign outlier status
+tab_els_outliers_100 <- lapply(names(tab_el_split_100), function(x)
+    tab_el_split_100[[x]] %>% 
+        mutate(outlier = value >= outlier_min_100[[x]],
+               outlier = factor(outlier, levels = outlier_levels))) %>%
+    setNames(names(tab_el_split_100))
+
+# Define basic plotting function (without axis scales)
+plot_exc_linear <- function(data, metric, outlier_pad = 5,
+                            force_values = 0){
+    # Split data by winner status
+    data_winners <- data %>% filter(winning_rank != "Other")
+    data_nonwinners <- data %>% filter(winning_rank == "Other")
+    # Generate outlier padding data (to prevent zero-height facets)
+    # Make plot
+    a <- aes(x=ranking, y=value, colour=winning_rank)
+    g <- ggplot(data = NULL, mapping = a) +
+        geom_point_nonwinners(data = data_nonwinners) +
+        geom_point_winners(data = data_winners) +
+        facet_grid(outlier~., scales = "free_y", space = "free_y") +
+        scale_colour_winners() + labs(y = metric) +
+        theme_base + 
+        theme(strip.text = element_blank(), aspect.ratio = NULL,
+              plot.tag = element_text(margin = tag_margin_fig4))
+    # Force particular values if needed
+    if (length(force_values) > 0){
+        data_force <- tibble(ranking = n_winners + 1, value = force_values,
+                             outlier = factor(FALSE, levels = outlier_levels),
+                             winning_rank = "Other")
+        g <- g + geom_point_nonwinners(data = data_force, alpha = 0)
+    }
+    # Add outlier padding if needed
+    if (sum(data$outlier == TRUE) > 0){
+        data_outliers <- data %>% filter(outlier == TRUE)
+        pad_values <- c(min(data_outliers$value)-outlier_pad,
+                        max(data_outliers$value)+outlier_pad)
+        data_outlier_pad <- tibble(ranking = n_winners + 1, value = pad_values,
+                                   outlier = factor(TRUE, levels = outlier_levels),
+                                   winning_rank = "Other")
+        g <- g + geom_point_nonwinners(data = data_outlier_pad, alpha = 0)
+    }
+    return(g)
+}
+
+# Make top-100 plots
+outlier_pad_100 <- list(X95 = 50/3, X99 = 50)
+y_breaks_100 <- list(X95 = c(seq(0, n_labs-100, 100), n_labs),
+                     X99 = c(seq(0, n_labs, 300), n_labs))
+force_values_100 <- list(X95 = c(0,400), X99 = c(0,1200))
+g_exc_linear_100 <- lapply(names(tab_els_outliers_100), function (x)
+    plot_exc_linear(tab_els_outliers_100[[x]], x, outlier_pad_100[[x]],
+                    force_values_100[[x]]) +
+        scale_x_ranking_100() + 
+        scale_y_cont_nominor(breaks = y_breaks_100[[x]],
+                             expand = c(0,0))) %>%
+    setNames(names(tab_els_outliers_100))
+
+#-----------------------------------------------------------------------------
+# Bring plots together
+#------------------------------------------------------------------------------
+
+# Fig. 3
+fig3 <- wrap_plots(g_example, g_exclusion_100, g_prior + guides(fill = FALSE),
+                   ncol = 3) +
+    plot_annotation(tag_levels = 'a') + plot_layout(guides = "collect") &
+    theme_legend & theme(legend.box.spacing = lines(-0.3),
+                         plot.margin = lmargin(c(0, 0.1, 0.1, 0)))
+
+fig3
+
+# Fig. 4 main
+fig4 <- wrap_plots(g_exc_linear_100[["X99"]], g_exc_linear_100[["X95"]],
+                   ncol = 2) +
+    plot_annotation(tag_levels = 'a') + plot_layout(guides = "collect") &
+    theme_legend & theme(plot.margin = lmargin(c(0.2, 0.2, 0.1, 0)))
+
+fig4
+```
+
+# Supplementary Figure: Calibration
+
+#==============================================================================
+# SI FIGURE: CALIBRATION
+#==============================================================================
+
+```{r,}
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Input path
+path_teams <- "data/team-stats.csv"
+
+# Output parameters
+out_path <- "figures/si_calibration.png"
+out_width <- fig_width_single_wide_in
+out_asp <- 1.25
+out_path_decile <- "figures/si_calibration-deciles.png"
+out_asp_decile <- 0.8
+
+# Scales for decile plot
+palette_win <- unname(palette_primary_dark[c("green2", "grey")])
+palette_win_dec <- c(palette_win[1], rep("black", 10))
+scale_fill_win <- purrr::partial(scale_fill_manual, values = palette_win,
+                                 name = "Prizewinners?", labels = c("Yes", "No"))
+scale_alpha_decile <- purrr::partial(scale_alpha_discrete, range = c(0.45,1),
+                              name = "Metric:")
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Import and prepare data
+#------------------------------------------------------------------------------
+
+data_teams <- import_csv(path_teams) %>% 
+    rename(ranking=prediction_track_ranking) %>%
+    mutate(winning_rank = ifelse(ranking <= n_winners, ranking, "Other"),
+           winning_rank = fct_inorder(winning_rank)) %>%
+    select(ranking, winning_rank, exp_calibration_error, max_calibration_error,
+           ranking_decile)
+data_win <- filter(data_teams, winning_rank != "Other")
+data_nonwin <- filter(data_teams, winning_rank == "Other")
+
+#------------------------------------------------------------------------------
+# Per-team plots
+#------------------------------------------------------------------------------
+
+aes_cal <- purrr::partial(aes, x = ranking, colour = winning_rank)
+stat_cspear <- purrr::partial(stat_spear, label.y = 0.98, vjust = 1, hjust = 0,
+                              data = data_teams, label.x = 90)
+
+g_mce <- ggplot(aes_cal(y=max_calibration_error), data = NULL) +
+    geom_point_winners(data = data_win) +
+    geom_point_nonwinners(data = data_nonwin) +
+    stat_cspear() +
+    scale_colour_winners() + scale_x_ranking_all() +
+    scale_y_percent(name = "Maximum Calibration Error (%)") +
+    theme_base + theme(aspect.ratio = 1/2)
+
+g_ece <- ggplot(aes_cal(y=exp_calibration_error), data = NULL) +
+    geom_point_winners(data = data_win) +
+    geom_point_nonwinners(data = data_nonwin) +
+    stat_cspear() +
+    scale_colour_winners() + scale_x_ranking_all() +
+    scale_y_percent(name = "Expected Calibration Error (%)") +
+    theme_base + theme(aspect.ratio = 1/2)
+
+g_out <- wrap_plots(g_ece, g_mce, ncol = 1) +
+    plot_annotation(tag_levels = "a") + plot_layout(guides = "collect") &
+    theme_legend
+
+g_mce
+g_ece
+g_out
+
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Decile plot
+#------------------------------------------------------------------------------
+
+# Define data
+data_deciles <- data_teams %>% group_by(ranking_decile) %>%
+    summarise(rank_max = max(ranking), rank_min = min(ranking),
+              ECE = mean(exp_calibration_error),
+              MCE = mean(max_calibration_error)) %>%
+    mutate(decile_label = paste(rank_min, rank_max, sep=" to "))
+data_winners <- data_teams %>% filter(ranking <= n_winners) %>%
+    summarise(ranking_decile = 0,
+              decile_label = paste(1, n_winners, sep = " to "),
+              rank_min = 1, rank_max = n_winners,
+              ECE = mean(exp_calibration_error),
+              MCE = mean(max_calibration_error))
+data_deciles_plot <- bind_rows(data_winners, data_deciles) %>%
+    mutate(decile_label = fct_inorder(decile_label),
+           winner = ranking_decile == 0) %>%
+    select(-rank_min, -rank_max) %>%
+    gather(metric, value, -ranking_decile, -decile_label, -winner) %>%
+    arrange(metric) %>% 
+    mutate(`Metric:` = fct_inorder(metric),
+           winner = factor(winner, levels = c(TRUE, FALSE)))
+
+# Prepare plotting auxiliaries
+aes_dec <- aes(x=decile_label, y=value, fill=winner, alpha=metric)
+
+g_deciles <- ggplot(data_deciles_plot, aes_dec) +
+    geom_col_mid(position = "dodge") +
+    scale_x_discrete(name = "Innovation Track ranking") +
+    scale_y_cont_nominor(name = "Mean prediction error (%)",
+                         breaks = seq(0,1,0.2), expand = c(0,0),
+                         labels = function(x) x*100,
+                         limits = c(0,0.8)) +
+    scale_fill_win() + scale_alpha_decile() +
+    theme_col + theme(
+        axis.text.x.bottom = element_text(colour = palette_win_dec),
+        aspect.ratio = 1/2
+    )
+g_deciles
+```
+
+
+
+# Supplementary Figure: Accuracy and X-Metrics
+
+#==============================================================================
+# SI FIGURE: CORRELATIONS BETWEEN ACCURACY AND X METRICS
+#==============================================================================
+
+```{r,}
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Input path
+path_teams    <- "data/team-stats.csv"
+
+# Output paths
+out_path_acc <- "figures/si_accuracy-correlations.png"
+out_path_x   <- "figures/si_xmetric-correlations.png"
+out_path_mix_all <- "figures/si_mix-correlations-all.png"
+out_path_mix_filtered <- "figures/si_mix-correlations-filtered.png"
+
+# Output parameters
+out_width <- page_width_in
+out_asp   <- 1.05
+
+# Themes & scales
+theme_cor <- theme_base + theme(
+  axis.title = element_blank(),
+  strip.text = element_text(margin = lmargin(rep(0.2, 4))),
+  aspect.ratio = 1,
+  plot.margin = lmargin(0.3, 0.4, 0.4, 0.4),
+)
+scale_x_acc <- purrr::partial(scale_x_continuous, breaks = seq(0,1,0.2),
+                              minor_breaks = NULL,
+                              labels = function(x) round(x*100))
+scale_y_acc <- purrr::partial(scale_y_continuous, breaks = seq(0,1,0.2),
+                              minor_breaks = NULL,
+                              labels = function(x) round(x*100))
+scale_x_nlabs <- purrr::partial(scale_x_cont_nominor, limits = c(0,n_labs),
+                                breaks = seq(0,2000,400),
+                                expand = c(0,0))
+scale_y_nlabs <- purrr::partial(scale_y_cont_nominor, limits = c(0,n_labs),
+                                breaks = seq(0,2000,400),
+                                expand = c(0,0))
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Import data
+#------------------------------------------------------------------------------
+
+# Team data
+data_teams <- suppressMessages(read_csv(path_teams))
+
+#------------------------------------------------------------------------------
+# Part 1: Intra-competition accuracy correlations
+#------------------------------------------------------------------------------
+
+# Types of accuracy metric
+tab_types <- tibble(accuracy_type_base = data_teams %>% 
+                      select(starts_with("accuracy")) %>% colnames) %>%
+  mutate(accuracy_type_nice = paste(sub("accuracy_top", "Top-", 
+                                        accuracy_type_base), "\nAccuracy (%)"),
+         accuracy_type_nice_asc = fct_inorder(accuracy_type_nice),
+         accuracy_type_nice_desc = fct_rev(accuracy_type_nice_asc)) %>%
+  select(-accuracy_type_nice)
+
+# Combinations of metrics to compare
+tab_acc_base <- expand_grid(ranking = data_teams$prediction_track_ranking,
+                            accuracy_type_1 = tab_types$accuracy_type_base,
+                            accuracy_type_2 = tab_types$accuracy_type_base) %>%
+  mutate(winning_rank = ifelse(ranking <= n_winners, ranking, "Other"))
+
+# Add nice accuracy names
+tab_acc_nice <- tab_acc_base %>%
+  inner_join(tab_types,
+             by = c("accuracy_type_1" = "accuracy_type_base")) %>% 
+  rename(accuracy_nice_1 = accuracy_type_nice_desc) %>%
+  select(-accuracy_type_nice_asc) %>%
+  inner_join(tab_types,
+             by = c("accuracy_type_2" = "accuracy_type_base")) %>% 
+  rename(accuracy_nice_2 = accuracy_type_nice_asc) %>%
+  select(-accuracy_type_nice_desc)
+  
+# Add accuracy values
+tab_teams_melt <- data_teams %>% 
+  select(ranking = prediction_track_ranking, starts_with("accuracy")) %>%
+  gather(accuracy_type, accuracy, -ranking)
+tab_acc <- tab_acc_nice %>%
+  inner_join(tab_teams_melt,
+             by = c("ranking" = "ranking", 
+                    "accuracy_type_1" = "accuracy_type")) %>% 
+  rename(accuracy_1 = accuracy) %>%
+  inner_join(tab_teams_melt,
+             by = c("ranking" = "ranking",
+                    "accuracy_type_2" = "accuracy_type")) %>% 
+  rename(accuracy_2 = accuracy)
+
+# Split into winners/nonwinners
+tab_acc_win <- tab_acc %>% filter(winning_rank != "Other")
+tab_acc_nonwin <- tab_acc %>% filter(winning_rank == "Other")
+
+# Make plots
+aes_col <- aes(colour=winning_rank)
+stat_spear_no_p <- purrr::partial(stat_spear, digits = 3,
+                                  mapping = aes(label = ..r.label..))
+stat_aspear <- purrr::partial(stat_spear_no_p, label.x = 0.05, label.y = 0.95,
+                              vjust = 1, hjust = 0, data = tab_acc)
+
+g_acc_cor <- ggplot(aes(x=accuracy_1, y=accuracy_2), data = NULL) +
+  geom_abline(size = 0.3, colour = palette_primary["grey"]) +
+  geom_point_nonwinners(data=tab_acc_nonwin, alpha=0.7, mapping=aes_col) +
+  geom_point_winners(data=tab_acc_win, alpha=1, mapping=aes_col) +
+  stat_aspear() +
+  facet_grid(accuracy_nice_1 ~ accuracy_nice_2, switch = "both") +
+  scale_x_acc() + scale_y_acc() + scale_colour_winners() +
+  theme_cor
+
+g_acc_cor
+```
+
+
+```{r,}
+#------------------------------------------------------------------------------
+# Part 2: Inter-X-metric correlations
+#------------------------------------------------------------------------------
+
+# Combinations of metrics to compare
+x_levels <- c("X99", "X95", "X90", "X80")
+x_types  <- fct_inorder(x_levels)
+x_types_rev <- fct_inorder(rev(x_levels))
+tab_x_base <- expand_grid(ranking = data_teams$prediction_track_ranking,
+                            x_type_1 = x_types, x_type_2 = x_types_rev) %>%
+  mutate(winning_rank = ifelse(ranking <= n_winners, ranking, "Other"))
+
+# Add values
+tab_teams_melt_x <- data_teams %>% 
+  select(ranking = prediction_track_ranking, starts_with("X")) %>%
+  gather(x_type, N, -ranking)
+tab_x <- tab_x_base %>%
+  inner_join(tab_teams_melt_x, 
+             by = c("ranking" = "ranking", 
+                    "x_type_1" = "x_type")) %>% 
+  rename(N1 = N) %>%
+  inner_join(tab_teams_melt_x, 
+             by = c("ranking" = "ranking", 
+                    "x_type_2" = "x_type")) %>% 
+  rename(N2 = N) %>%
+  mutate(x_type_1 = factor(x_type_1, levels = x_levels),
+         x_type_2 = factor(x_type_2, levels = rev(x_levels)))
+  
+# Split into winners/nonwinners
+tab_x_win <- tab_x %>% filter(winning_rank != "Other")
+tab_x_nonwin <- tab_x %>% filter(winning_rank == "Other")
+
+# Make plots
+stat_xspear <- purrr::partial(stat_spear_no_p, label.x = n_labs*0.05, 
+                              label.y = n_labs*0.95,
+                              vjust = 1, hjust = 0, data = tab_x)
+
+g_x_cor <- ggplot(aes(x=N1, y=N2), data = NULL) +
+  geom_abline(size = 0.3, colour = palette_primary["grey"]) +
+  geom_point_nonwinners(data=tab_x_nonwin, alpha=0.7, mapping=aes_col) +
+  geom_point_winners(data=tab_x_win, alpha=1, mapping=aes_col) +
+  stat_xspear() +
+  facet_grid(x_type_1 ~ x_type_2, switch = "both") +
+  scale_x_nlabs() + scale_y_nlabs() + scale_colour_winners() +
+  theme_cor
+
+g_x_cor
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Part 3: X-vs-accuracy correlations (all teams)
+#------------------------------------------------------------------------------
+
+# Combinations to compare
+tab_mix_base <- expand_grid(ranking = data_teams$prediction_track_ranking,
+                            accuracy_type = tab_types$accuracy_type_base,
+                            x_type = x_types_rev) %>%
+  mutate(winning_rank = ifelse(ranking <= n_winners, ranking, "Other"))
+
+# Add nice accuracy names
+tab_mix_nice <- tab_mix_base %>%
+  inner_join(tab_types,
+             by = c("accuracy_type" = "accuracy_type_base")) %>% 
+  rename(accuracy_nice = accuracy_type_nice_asc) %>%
+  select(-accuracy_type_nice_desc)
+
+# Add values
+tab_mix <- tab_mix_nice %>%
+  inner_join(tab_teams_melt, by = c("ranking", "accuracy_type")) %>%
+  inner_join(tab_teams_melt_x, by = c("ranking", "x_type")) %>%
+  mutate(x_type = factor(x_type, levels = x_levels))
+
+# Split into winners/nonwinners
+tab_mix_win <- tab_mix %>% filter(winning_rank != "Other")
+tab_mix_nonwin <- tab_mix %>% filter(winning_rank == "Other")
+
+# Make plots
+stat_mspear <- purrr::partial(stat_spear_no_p, label.x = 0.05, 
+                              label.y = n_labs*0.95,
+                              vjust = 1, hjust = 0, data = tab_mix)
+g_mix_cor_all <- ggplot(aes(x=accuracy, y=N), data = NULL) +
+  geom_point_nonwinners(data=tab_mix_nonwin, alpha=0.7, mapping=aes_col) +
+  geom_point_winners(data=tab_mix_win, alpha=1, mapping=aes_col) +
+  stat_mspear() +
+  facet_grid(x_type ~ accuracy_nice, switch = "both") +
+  scale_x_acc() + scale_y_nlabs() + scale_colour_winners() +
+  theme_cor
+g_mix_cor_all
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Part 4: X-vs-accuracy correlations (filtered)
+#------------------------------------------------------------------------------
+
+# Filter data to remove outliers
+tab_mixf <- tab_mix %>% filter(N < n_labs)
+tab_mixf_win <- tab_mixf %>% filter(winning_rank != "Other")
+tab_mixf_nonwin <- tab_mixf %>% filter(winning_rank == "Other")
+
+# Make plots
+stat_fspear <- purrr::partial(stat_spear_no_p, label.x = 0.05, 
+                              label.y = n_labs*0.95,
+                              vjust = 1, hjust = 0, data = tab_mixf)
+g_mix_cor_filtered <- ggplot(aes(x=accuracy, y=N), data = NULL) +
+  geom_point_nonwinners(data=tab_mixf_nonwin, alpha=0.7, mapping=aes_col) +
+  geom_point_winners(data=tab_mixf_win, alpha=1, mapping=aes_col) +
+  stat_fspear() +
+  facet_grid(x_type ~ accuracy_nice, switch = "both") +
+  scale_x_acc() + scale_y_nlabs() + scale_colour_winners() +
+  theme_cor
+
+g_mix_cor_filtered
+```
+
+# Supplementary Figure: Sequences per lab
+
+```{r,}
+#==============================================================================
+# SI FIGURES: SEQUENCES PER LAB
+#==============================================================================
+
+# Libraries
+source("scripts/aux_format-plots.R")
+
+# Input paths
+data_path <- "data/lab-counts.csv"
+
+# Output paths
+out_path_all  <- "figures/si_sequences-per-lab.png"
+out_path_test <- "figures/si_test-lab-composition.png"
+
+# Output parameters
+output_width_in <- fig_width_single_wide_in
+output_asp <- 0.7
+
+# Palettes
+palette_test <- unname(palette_secondary[c("red", "blue")])
+
+#------------------------------------------------------------------------------
+# Import and process data
+#------------------------------------------------------------------------------
+
+# Import data
+data <- import_csv(data_path)
+
+# Pre-collapse meta-counts
+data_all <- data %>%
+  mutate(n_all = n_leaderboard + n_test + n_train) %>%
+  group_by(n_seq = n_all) %>% summarise(n_labs = n())
+
+# Test-set counts (post-collapse)
+id_unkn <- max(data$lab_id_hidden, na.rm = TRUE) + 1
+data_test <- data %>% filter(n_test > 0) %>%
+  mutate(lab_id_hidden = ifelse(unknown_engineered, id_unkn, 
+                                lab_id_hidden)) %>%
+  group_by(lab_id_hidden, unknown_engineered) %>% 
+  summarise(n_seq = sum(n_test), .groups = "drop") %>%
+  mutate(lab_rank = row_number(desc(n_seq)),
+         p_seq = n_seq/sum(n_seq),
+         unk_eng = ifelse(unknown_engineered,
+                          "Unknown Engineered", "Other lab"),
+         unk_eng = factor(unk_eng, 
+                          levels = c("Unknown Engineered", "Other lab"))) %>%
+  select(lab_rank, p_seq, unk_eng)
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Plot pre-collapse meta-counts
+#------------------------------------------------------------------------------
+
+g_ccount <- ggplot(data_all, aes(x=n_seq, y=n_labs)) +
+  geom_line(size = 0.5, colour = palette_primary_dark["grey"]) + 
+  geom_point(shape = 16, size = 2, colour = palette_primary_dark["grey"]) +
+  scale_x_log10(name="Plasmid entries per lab") +
+  scale_y_continuous(name="Number of labs", minor_breaks = NULL) +
+  theme_base + theme(aspect.ratio = 1/2)
+g_ccount
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Plot test-set composition
+#------------------------------------------------------------------------------
+
+g_test <- ggplot(data_test, aes(x=lab_rank, y=p_seq, colour=unk_eng)) +
+  geom_line(size = 0.2, colour = palette_test[2]) +
+  geom_point() +
+  scale_x_log10("Lab ranking (by number of sequences in test set)") +
+  scale_y_continuous(name = "Percentage of test set",
+                     labels = function(x) as.integer(x*100),
+                     limits = c(0,0.08)) +
+  scale_colour_manual(name = "Lab",
+                      values = palette_test) +
+  theme_base + theme(aspect.ratio = 1/2)
+g_test
+```
+
+# Supplementary Figure: Ensemble Top-N Accuracy
+
+#==============================================================================
+# SI FIGURE: ENSEMBLE TOP-N ACCURACY
+#==============================================================================
+
+```{r,}
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Input paths
+path_acc_teams <- "data/team-top-n-accuracy.csv"
+path_acc_ens   <- "data/key-model-top-n-accuracy.csv"
+
+# Output paths
+out_path <- "figures/si_ensemble-top-n.png"
+
+# Output parameters
+output_width_in <- fig_width_single_wide_in
+output_asp <- 0.7
+
+# Define palettes, scales, themes
+palette_model <- unname(palette_primary[c("yellow", "green1")])
+scale_colour_model <- purrr::partial(scale_colour_manual,
+                                     values = palette_model,
+                                     name = "Model:")
+theme_wide <- theme_base + theme(aspect.ratio = 1/2)
+
+#------------------------------------------------------------------------------
+# Import and process data
+#------------------------------------------------------------------------------
+
+# Import data
+data_acc_ens   <- import_csv(path_acc_ens) %>%
+  filter(grepl("Ensemble", source)) %>% select(-source)
+data_acc_teams <- import_csv_matrix(path_acc_teams)
+
+# Extract 1st-place accuracies
+data_acc_geac_1st <- data_acc_teams[which.max(data_acc_teams[,10]),]
+
+# Combine accuracies
+data_acc_n <- data_acc_ens %>% rename(`GEAC Ensemble` = accuracy_top_n) %>%
+  mutate(`GEAC (1st place)` = data_acc_geac_1st) %>%
+  gather(model, accuracy_top_n, -n) %>%
+  mutate(model = fct_inorder(model))
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Make plot
+#------------------------------------------------------------------------------
+
+g_n <- ggplot(data_acc_n, aes(x=n, y=accuracy_top_n, colour = model)) +
+  geom_line_thin() + geom_point_fixed() +
+  scale_x_log10(name = "N") +
+  scale_y_cont_nominor(name = "Top-N Accuracy (%)", limits = c(0.8, 1),
+                       breaks = seq(0,1,0.05),
+                       labels = function(y) y * 100) +
+  scale_colour_model() + theme_wide
+g_n
+```
+
+
+
+# Supplementary Figure: Key models
+
+#==============================================================================
+# KEY MODEL SUPPLEMENTARY FIGURES
+#==============================================================================
+```{r,}
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Parameters
+source_names_raw <- c("BLAST (new)", "BLAST (Alley et al., original)",
+                  "BLAST (Alley et al., corrected)", "Nielsen & Voigt (2018)", "Alley et al. (2020)",
+                  "GEAC (1st place)", "GEAC (2nd place)", "GEAC (3rd place)",
+                  "GEAC (4th place)", "GEAC Ensemble")
+source_names_plot <- c(NA, "BLAST (original)",
+                      "BLAST (modified)", "Nielsen & Voigt (2018)",
+                      "Alley et al. (2020)",
+                      "GEAC (1st place)", "GEAC (2nd place)", "GEAC (3rd place)",
+                      "GEAC (4th place)", "GEAC Ensemble")
+levels_unkn <- c("All labs", "Known labs only", "Unknown Engineered only")
+unk_eng_true_frequency <- 0.07541186
+
+# Input paths
+path_key <- "data/key-model-stats.csv"
+path_unkn <- "data/key-model-unknown-engineered-stats.csv"
+
+# Output parameters
+out_path_acc     <- "figures/si_key-model-accuracy.png"
+out_path_x       <- "figures/si_key-model-xmetrics.png"
+out_path_cal     <- "figures/si_key-model-calibration.png"
+out_path_unkn    <- "figures/si_key-model-unknown-engineered.png"
+out_path_f1      <- "figures/si_key-model-f1.png"
+out_width_full   <- page_width_in
+out_width_single <- fig_width_single_wide_in
+out_asp_acc      <- 1.5
+out_asp_x        <- 1.5
+out_asp_cal      <- 0.82
+out_asp_unkn     <- 0.9
+out_asp_f1       <- 0.82
+
+# Themes, palettes, geoms
+palette_calibration <- unname(c(palette_primary["grey"],
+                                palette_primary_dark["grey"]))
+palette_f1 <- unname(c(palette_primary_mid["grey"],
+                       palette_primary_dark["grey"],
+                       "black"))
+palette_nlabs <- unname(palette_primary_darkmid["grey"])
+scale_fill_cal <- purrr::partial(scale_fill_manual, name = "Metric:",
+                                 values = palette_calibration)
+scale_fill_f1 <- purrr::partial(scale_fill_manual, name = "Metric:",
+                                values = palette_f1)
+geom_hline_nlabs <- purrr::partial(geom_hline, yintercept = n_labs,
+                                   colour = palette_nlabs, size = 0.3,
+                                   linetype = "dashed")
+annot_nlabs <- purrr::partial(annotate, geom = "text", x = Inf,
+                              label = "All labs", hjust = 1, vjust = 1,
+                              size = rescale_font(fontsize_base),
+                              colour = palette_nlabs)
+annot_nlabs_lin <- purrr::partial(annot_nlabs, y = n_labs-40)
+annot_nlabs_log <- purrr::partial(annot_nlabs, y = n_labs*0.87)
+
+#------------------------------------------------------------------------------
+# Import data
+#------------------------------------------------------------------------------
+
+data_key <- import_csv(path_key)
+data_unkn <- import_csv(path_unkn)
+
+#------------------------------------------------------------------------------
+# Process data
+#------------------------------------------------------------------------------
+
+# Modify sources and source names for display
+tab_sources <- tibble(source = source_names_raw,
+                      source_new = source_names_plot)
+rename_sources <- function(tab){
+  inner_join(tab, tab_sources, by = "source") %>%
+    filter(!is.na(source_new)) %>% select(-source) %>%
+    select(source = source_new, everything()) %>%
+    mutate(source = factor(source, levels = source_names_plot[-1])) %>%
+    arrange(source)
+}
+
+data_key_named <- rename_sources(data_key)
+data_unkn_named <- rename_sources(data_unkn) %>%
+  mutate(data_subset = factor(data_subset, levels = levels_unkn))
+
+#------------------------------------------------------------------------------
+# Accuracy
+#------------------------------------------------------------------------------
+
+scale_x_key <- purrr::partial(scale_x_discrete, name = "Model")
+theme_col_bare_wide <- theme_col + 
+  theme(aspect.ratio = 1/2,
+        axis.title.x.bottom = element_blank())
+
+tab_accuracy <- data_key_named %>% select(source, starts_with("accuracy")) %>%
+  gather(metric, accuracy, -source) %>%
+  mutate(metric = sub("accuracy_top", "Top ", metric),
+         metric = fct_inorder(metric))
+aes_col <- purrr::partial(aes, x=source, fill=metric)
+```
+
+
+```{r,}
+g_accuracy <- ggplot(tab_accuracy, aes_col(y=accuracy)) +
+  geom_col_mid(position = "dodge") +
+  scale_x_key() + scale_y_percent(name = "Accuracy (%)") +
+  scale_fill_accuracy() + theme_col_bare_wide
+g_accuracy
+
+g_error <- ggplot(tab_accuracy, aes_col(y=1-accuracy)) +
+  geom_col_mid(position = "dodge") +
+  scale_x_key() + theme_col_bare_wide +
+  scale_y_cont_nominor(name = "Misclassification rate (%)", expand = c(0,0),
+                       labels = function(y) as.integer(y * 100),
+                       limits = c(0,0.5), breaks = seq(0,1,0.1)) +
+  scale_fill_accuracy() + theme_col_bare_wide
+g_error
+
+g_acc_out <- wrap_plots(g_accuracy, g_error, ncol = 1) +
+  plot_annotation(tag_levels = "a") + plot_layout(guides = "collect") &
+  theme_legend
+g_acc_out
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# X-metrics
+#------------------------------------------------------------------------------
+
+tab_x <- data_key_named %>% select(source, starts_with("X")) %>%
+  gather(metric, N, -source) %>% arrange(desc(metric)) %>%
+  mutate(metric = fct_inorder(metric))
+
+plot_x <- function(data){
+  ggplot(data, aes_col(y=N)) + geom_col_mid(position = "dodge") +
+    geom_hline_nlabs() + scale_x_key() + scale_fill_x() + theme_col_bare_wide
+}
+
+g_x_all <- plot_x(tab_x) + scale_y_log_nominor(expand=c(0,0)) +
+  annot_nlabs_log()
+g_x_all
+
+g_x_large <- plot_x(filter(tab_x, metric %in% c("X99", "X95"))) +
+  scale_y_cont_nominor(expand=c(0,0), breaks = seq(0,2000,400)) +
+  annot_nlabs_lin()
+g_x_large
+
+g_x_out <- wrap_plots(g_x_all, g_x_large + guides(fill = FALSE), ncol = 1) +
+  plot_annotation(tag_levels = "a") + plot_layout(guides = "collect") &
+  theme_legend
+g_x_out
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Calibration
+#------------------------------------------------------------------------------
+
+tab_cal <- data_key_named %>% select(source, contains("calibration")) %>%
+  gather(metric, error, -source) %>%
+  mutate(metric = toupper(sub(".._calibration_error", "ce", metric)),
+         metric = fct_inorder(metric))
+  
+g_cal <- ggplot(tab_cal, aes_col(y=error)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  scale_y_cont_nominor(name = "Calibration error (%)", expand = c(0,0),
+                       labels = function(y) as.integer(y * 100),
+                       limits = c(0,0.4), breaks = seq(0,1,0.1)) +
+  scale_fill_cal() + theme_col_bare_wide
+g_cal
+
+g_cal_out <- wrap_plots(g_cal, ncol = 1) +
+  plot_layout(guides = "collect") & theme_legend
+g_cal_out
+```
+
+```{r,}
+#------------------------------------------------------------------------------
+# Precision/recall/F1
+#------------------------------------------------------------------------------
+
+tab_f1 <- data_key_named %>% select(source, starts_with("macro")) %>%
+  rename(Precision = macro_precision, Recall = macro_recall,
+         `F1 score` = macro_f1) %>%
+  gather(metric, value, -source) %>%
+  mutate(metric = fct_inorder(metric))
+
+g_f1 <- ggplot(tab_f1, aes_col(y=value)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  scale_y_proportion(name = NULL) + scale_fill_f1() +
+  theme_col_bare_wide
+g_f1
+
+g_f1_out <- wrap_plots(g_f1, ncol = 1) +
+  plot_layout(guides = "collect") & theme_legend
+g_f1_out
+```
+
+# Supplementary Figure: Unknown engineered
+```{r,}
+#------------------------------------------------------------------------------
+# Unknown Engineered
+#------------------------------------------------------------------------------
+
+aes_unkn <- purrr::partial(aes, x = source, fill = data_subset)
+
+# Top-10 accuracy
+g_unkn_acc_top10 <- ggplot(data_unkn_named, aes_unkn(y=accuracy_top10)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  scale_y_percent(name = "Top-10 accuracy (%)") + 
+  scale_fill_unkn() + theme_col_bare_wide
+g_unkn_acc_top10
+
+# Top-1 accuracy
+g_unkn_acc_top1 <- ggplot(data_unkn_named, aes_unkn(y=accuracy_top1)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  scale_y_percent(name = "Top-1 accuracy (%)") + 
+  scale_fill_unkn() + theme_col_bare_wide
+g_unkn_acc_top1
+
+# Rate of Unknown Engineered in top-10
+g_unkn_in_top10 <- ggplot(data_unkn_named, aes_unkn(y=unk_eng_in_top10)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  geom_hline(yintercept = unk_eng_true_frequency, colour = palette_secondary["red"],
+             linetype = "dashed", size = 0.3) +
+  scale_y_percent(name = "Mean frequency of\nUnk. Eng. in top 10 guesses") + 
+  scale_fill_unkn() + theme_col_bare_wide
+g_unkn_in_top10
+
+# Average rank of unknown engineered
+g_unkn_rank <- ggplot(data_unkn_named, aes_unkn(y=unk_eng_avg_rank)) +
+  geom_col_mid(position = "dodge") + scale_x_key() +
+  scale_y_cont_nominor(name = "Geometric mean of\nUnk. Eng. ranking",
+                       expand = c(0,0)) + 
+  scale_fill_unkn() + theme_col_bare_wide
+g_unkn_rank
+
+g_unkn_out <- wrap_plots(g_unkn_in_top10, g_unkn_rank, g_unkn_acc_top10,
+                      g_unkn_acc_top1, ncol = 2) +
+  plot_annotation(tag_levels = "a") + plot_layout(guides = "collect") &
+  theme_legend
+g_unkn_out
+```
+
+# Supplementary Figure: X99 vs X95
+#==============================================================================
+# SUPPLEMENTARY FIGURE: X99 VS X95
+#==============================================================================
+
+```{r,}
+
+# Libraries & formatting
+source("scripts/aux_format-plots.R")
+
+# Input paths (team data)
+path_teams <- "data/team-stats.csv"
+
+# Output paths
+out_path_xrel <- "figures/si_x99-vs-x95.png"
+
+# Output parameters
+output_width_xrel <- fig_width_single_narrow_in
+output_asp_xrel   <- 0.9
+
+#------------------------------------------------------------------------------
+# Define palettes and scales
+#------------------------------------------------------------------------------
+
+# Winners vs nonwinners
+palette_win <- unname(palette_primary_dark[c("grey", "green2")])
+palette_win_dec <- c(palette_win[2], rep("black", 10))
+scale_fill_win <- purrr::partial(scale_fill_manual,
+                               name = "Metric:",
+                               values = palette_win)
+
+#------------------------------------------------------------------------------
+# Read data
+#------------------------------------------------------------------------------
+
+data_teams <- suppressMessages(read_csv(path_teams))
+
+#------------------------------------------------------------------------------
+# Add decile labels
+#------------------------------------------------------------------------------
+
+tab_teams_labelled <- data_teams %>% group_by(ranking_decile) %>%
+  mutate(decile_rank_min = min(prediction_track_ranking),
+         decile_rank_max = max(prediction_track_ranking),
+         decile_label = paste(decile_rank_min, 
+                              decile_rank_max, sep=" to "),
+         decile_label_long = paste("Rank", decile_label),
+         decile_label = fct_inorder(decile_label),
+         decile_label_long = fct_inorder(decile_label_long))
+
+#------------------------------------------------------------------------------
+# X99 vs X95
+#------------------------------------------------------------------------------
+
+# Compute ratio
+tab_teams_xrel <- mutate(tab_teams_labelled,
+                         xrel = X99/X95)
+
+# Add separate winners column
+tab_teams_xrel_win <- tab_teams_xrel %>% 
+  filter(prediction_track_ranking <= n_winners) %>%
+  mutate(ranking_decile = 0, 
+         decile_label = paste(1, n_winners, sep = " to "),
+         decile_label_long = paste("Rank", decile_label)) %>%
+  bind_rows(tab_teams_xrel) %>%
+  mutate(decile_label = fct_inorder(decile_label),
+         decile_label_long = fct_inorder(decile_label_long),
+         winner = (ranking_decile == 0))
+
+# Summarise by decile
+tab_teams_xrel_summ <- tab_teams_xrel_win %>%
+  group_by(ranking_decile) %>%
+  summarise(geomean_xrel = geomean(xrel),
+            ranking_decile = ranking_decile[1],
+            decile_label = decile_label[1],
+            decile_label_long = decile_label_long[1],
+            winner = winner[1])
+```
+
+
+```{r,}
+g_xrel_deciles <- ggplot(tab_teams_xrel_summ,
+                         aes(x=decile_label, y = geomean_xrel,
+                             fill = winner)) + 
+  scale_x_discrete(name = "Innovation Track ranking") +
+  scale_y_cont_nominor(name = "X99 Ã· X95 (geometric mean)", limits = c(0,10),
+                       breaks = seq(0,100,2), expand = c(0,0)) +
+  scale_fill_win(guide = FALSE) +
+  geom_col() + theme_col + theme(
+    axis.text.x.bottom = element_text(colour = palette_win_dec),
+  )
+g_xrel_deciles
+```
+
+# Session Information
+
+```{r,}
+sessionInfo()
+```
+
