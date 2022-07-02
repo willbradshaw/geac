@@ -1,0 +1,116 @@
+---
+title: "Distribution analysis top-4"
+author: "Oliver M. Crook"
+date: "02/07/2022"
+output: html_document
+---
+
+# Make figure robustness analysis
+
+```{r,}
+subsamples <- 1000
+```
+
+```{r,}
+rnk_winner <- readRDS(file = "data/rnk_winner.rds")
+```
+
+```{r,}
+acc10 <- matrix(NA, 4, subsamples)
+acc <- matrix(NA, 4, subsamples)
+X99 <- X95 <- X90 <- X50 <- matrix(NA, 4, subsamples)
+for (j in 1:4){
+       acc10[j, ] <- apply(rnk_winner[j,,], 1, function(x) sum((x < 11))/length(x)) ## accuracy
+       acc[j, ] <- apply(rnk_winner[j, ,], 1, function(x) sum((x == 1))/length(x)) ## accuracy
+       X99[j, ] <- apply(rnk_winner[j,,], 1, function(x) 
+           min(as.numeric(names((which((cumsum(table(x))/length(x) > 0.99), arr.ind = TRUE)))[1]), 1314))
+       X95[j, ] <- apply(rnk_winner[j,,], 1, function(x)
+           min(as.numeric(names((which((cumsum(table(x))/length(x) > 0.95), arr.ind = TRUE)))[1]), 1314))
+       X90[j, ] <- apply(rnk_winner[j,,], 1, function(x)
+           min(as.numeric(names((which((cumsum(table(x))/length(x) > 0.90), arr.ind = TRUE)))[1]), 1314))
+       X50[j, ] <- apply(rnk_winner[j,,], 1, function(x)
+           min(as.numeric(names((which((cumsum(table(x))/length(x) > 0.50), arr.ind = TRUE)))[1]), 1314))
+}
+
+```
+
+
+```{r,}
+source("scripts/aux_format-plots.R")
+
+# Input paths
+path_key <- "data/key-model-stats.csv"
+
+# Output path
+out_path  <- "figures/main_fig1-accuracy.svg"
+
+# Define plotting theme
+xtext = element_text(angle = 45, vjust = 1, hjust = 1,
+                     margin = lmargin(t=0.3,b=-0.9),
+                     size = fontsize_title)
+ltext = element_text(margin = lmargin(t=0.1,b=0.1,l=0.1,r=0))
+theme_col <- theme_internal_strong + theme(
+  axis.title.x = element_blank(),
+  axis.text.x.bottom = xtext,
+  legend.text = ltext,
+  legend.position = c(0.98, 0.98),
+  legend.justification = c("right", "top"),
+  legend.title = element_blank(),
+  legend.margin = lmargin(rep(0.1,4)),
+  legend.box.margin = lmargin(rep(0.1,4)),
+  legend.key.height = lines(0.9),
+  legend.key.width  = lines(0.9),
+  aspect.ratio = NULL,
+  plot.margin = lmargin(t=0.3,l=0.05,r=0.05)
+)
+
+```
+
+```{r,}
+require(reshape2)
+acc <- data.frame(acc)
+acc <- melt(acc)
+acc$rank <- rep(c(1,2,3,4), times = 1000)
+
+# Plot accuracy
+g_accuracy_dist <- ggplot(acc, 
+                             aes(x=as.factor(rank), y=value, fill = as.factor(rank), group = rank)) +
+  geom_boxplot() +
+   scale_y_cont_nominor(name = "accuracy (%)",
+                     labels = function(x) as.integer(x*100),
+                     breaks = seq(0,1,0.05), limits = c(0.65, 0.85),
+                     expand = c(0,0.01)) +
+  scale_fill_winners() +
+  theme_base + ylab("Accuracy") + xlab("GEAC Prediction Track ranking")
+
+acc10 <- data.frame(acc10)
+acc10 <- melt(acc10)
+acc10$rank <- as.factor(rep(c(1,2,3,4), times = 1000))
+
+g_accuracy10_dist <- ggplot(acc10, 
+                             aes(x=rank, y=value, fill = rank)) +
+  geom_boxplot() +
+  scale_fill_winners() +
+       scale_y_cont_nominor(name = "Top-10 accuracy (%)",
+                     labels = function(x) as.integer(x*100),
+                     breaks = seq(0,1,0.02), limits = c(0.93, 0.96),
+                     expand = c(0,0.01)) + 
+  theme_base + ylab("Top-10 accuracy") + xlab("GEAC Prediction Track ranking")
+
+X99 <- data.frame(X99)
+X99 <- melt(X99)
+X99$rank <- as.factor(rep(c(1,2,3,4), times = 1000))
+
+g_x99_dist <- ggplot(X99, 
+                             aes(x=rank, y=value, fill = rank)) +
+  geom_boxplot() +
+  scale_fill_winners() + scale_y_cont_nominor(name = "X99",
+                     breaks = seq(0,1800,300)) + 
+  theme_base + xlab("GEAC Prediction Track ranking")
+
+```
+
+```{r,}
+g_accuracy_dist + g_accuracy10_dist + g_x99_dist + plot_layout(guides = "collect") & theme_legend
+
+```
